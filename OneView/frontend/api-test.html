@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KPI Dashboard API Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1a202c;
+            color: #e2e8f0;
+        }
+        .container {
+            background-color: #2d3748;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        button {
+            background-color: #4299e1;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #3182ce;
+        }
+        button:disabled {
+            background-color: #4a5568;
+            cursor: not-allowed;
+        }
+        input {
+            background-color: #4a5568;
+            color: #e2e8f0;
+            border: 1px solid #718096;
+            padding: 8px;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        .success {
+            color: #68d391;
+        }
+        .error {
+            color: #f56565;
+        }
+        .response {
+            background-color: #1a202c;
+            padding: 15px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .metric-card {
+            background-color: #4a5568;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px;
+            display: inline-block;
+            min-width: 200px;
+        }
+        .metric-title {
+            font-size: 14px;
+            color: #a0aec0;
+            margin-bottom: 5px;
+        }
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #e2e8f0;
+        }
+        .campaign-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .campaign-table th, .campaign-table td {
+            border: 1px solid #4a5568;
+            padding: 10px;
+            text-align: left;
+        }
+        .campaign-table th {
+            background-color: #4a5568;
+        }
+    </style>
+</head>
+<body>
+    <h1>🚀 KPI Dashboard API Test</h1>
+    
+    <div class="container">
+        <h2>Authentication</h2>
+        <input type="email" id="email" placeholder="Email" value="admin@company.com">
+        <input type="password" id="password" placeholder="Password" value="admin123">
+        <button onclick="login()">Login</button>
+        <button onclick="logout()">Logout</button>
+        <div id="authStatus"></div>
+    </div>
+    
+    <div class="container">
+        <h2>KPI Data</h2>
+        <button onclick="fetchKPIData()" id="fetchBtn" disabled>Fetch KPI Data</button>
+        <button onclick="fetchKPIData(true)">Force Refresh</button>
+        <div id="kpiStatus"></div>
+    </div>
+    
+    <div class="container" id="metricsContainer" style="display: none;">
+        <h2>Key Metrics</h2>
+        <div id="metrics"></div>
+    </div>
+    
+    <div class="container" id="campaignsContainer" style="display: none;">
+        <h2>Campaign Performance</h2>
+        <div id="campaignTabs">
+            <button onclick="showCampaigns('google')" id="googleTab">Google Ads</button>
+            <button onclick="showCampaigns('meta')" id="metaTab">Meta Ads</button>
+        </div>
+        <div id="campaigns"></div>
+    </div>
+    
+    <div class="container">
+        <h2>Raw Response</h2>
+        <div id="response" class="response"></div>
+    </div>
+
+    <script>
+        let accessToken = localStorage.getItem('access_token');
+        let currentData = null;
+        
+        function updateAuthStatus() {
+            const status = document.getElementById('authStatus');
+            const fetchBtn = document.getElementById('fetchBtn');
+            
+            if (accessToken) {
+                status.innerHTML = '<span class="success">✅ Authenticated</span>';
+                fetchBtn.disabled = false;
+            } else {
+                status.innerHTML = '<span class="error">❌ Not authenticated</span>';
+                fetchBtn.disabled = true;
+            }
+        }
+        
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    accessToken = data.access_token;
+                    localStorage.setItem('access_token', accessToken);
+                    localStorage.setItem('user_data', JSON.stringify(data.user));
+                    updateAuthStatus();
+                    document.getElementById('response').textContent = JSON.stringify(data, null, 2);
+                } else {
+                    document.getElementById('authStatus').innerHTML = `<span class="error">❌ Login failed: ${data.error}</span>`;
+                    document.getElementById('response').textContent = JSON.stringify(data, null, 2);
+                }
+            } catch (error) {
+                document.getElementById('authStatus').innerHTML = `<span class="error">❌ Network error: ${error.message}</span>`;
+                document.getElementById('response').textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        function logout() {
+            accessToken = null;
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('user_data');
+            updateAuthStatus();
+            document.getElementById('metricsContainer').style.display = 'none';
+            document.getElementById('campaignsContainer').style.display = 'none';
+            document.getElementById('response').textContent = 'Logged out successfully';
+        }
+        
+        async function fetchKPIData(forceRefresh = false) {
+            if (!accessToken) {
+                document.getElementById('kpiStatus').innerHTML = '<span class="error">❌ Please login first</span>';
+                return;
+            }
+            
+            try {
+                const url = `http://localhost:5000/api/kpi-data${forceRefresh ? '?force_refresh=true' : ''}`;
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    currentData = data;
+                    document.getElementById('kpiStatus').innerHTML = '<span class="success">✅ KPI data loaded successfully</span>';
+                    document.getElementById('response').textContent = JSON.stringify(data, null, 2);
+                    displayMetrics(data);
+                    displayCampaigns(data);
+                } else {
+                    document.getElementById('kpiStatus').innerHTML = `<span class="error">❌ Failed to fetch KPI data: ${data.error}</span>`;
+                    document.getElementById('response').textContent = JSON.stringify(data, null, 2);
+                }
+            } catch (error) {
+                document.getElementById('kpiStatus').innerHTML = `<span class="error">❌ Network error: ${error.message}</span>`;
+                document.getElementById('response').textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        function displayMetrics(data) {
+            const container = document.getElementById('metricsContainer');
+            const metricsDiv = document.getElementById('metrics');
+            
+            if (data.data && data.data.key_metrics) {
+                const metrics = data.data.key_metrics;
+                let html = '';
+                
+                for (const [key, value] of Object.entries(metrics)) {
+                    const title = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    let displayValue = value;
+                    
+                    if (key.includes('spend') || key.includes('revenue') || key.includes('cost')) {
+                        displayValue = `$${value?.toLocaleString() || 0}`;
+                    } else if (key.includes('rate') || key === 'ctr') {
+                        displayValue = `${value?.toFixed(2) || 0}%`;
+                    } else if (typeof value === 'number') {
+                        displayValue = value.toLocaleString();
+                    }
+                    
+                    html += `
+                        <div class="metric-card">
+                            <div class="metric-title">${title}</div>
+                            <div class="metric-value">${displayValue}</div>
+                        </div>
+                    `;
+                }
+                
+                metricsDiv.innerHTML = html;
+                container.style.display = 'block';
+            }
+        }
+        
+        function displayCampaigns(data) {
+            const container = document.getElementById('campaignsContainer');
+            
+            if (data.data && (data.data.google_ads || data.data.meta_ads)) {
+                container.style.display = 'block';
+                showCampaigns('google'); // Default to Google campaigns
+            }
+        }
+        
+        function showCampaigns(platform) {
+            if (!currentData) return;
+            
+            const campaignsDiv = document.getElementById('campaigns');
+            const googleTab = document.getElementById('googleTab');
+            const metaTab = document.getElementById('metaTab');
+            
+            // Update tab styling
+            googleTab.style.backgroundColor = platform === 'google' ? '#4299e1' : '#4a5568';
+            metaTab.style.backgroundColor = platform === 'meta' ? '#4299e1' : '#4a5568';
+            
+            let campaigns = [];
+            let platformName = '';
+            
+            if (platform === 'google' && currentData.data.google_ads) {
+                campaigns = currentData.data.google_ads.campaigns || [];
+                platformName = 'Google Ads';
+            } else if (platform === 'meta' && currentData.data.meta_ads) {
+                campaigns = currentData.data.meta_ads.campaigns || [];
+                platformName = 'Meta Ads';
+            }
+            
+            if (campaigns.length === 0) {
+                campaignsDiv.innerHTML = `<p>No ${platformName} campaigns found</p>`;
+                return;
+            }
+            
+            let html = `<h3>${platformName} Campaigns</h3>`;
+            html += `
+                <table class="campaign-table">
+                    <thead>
+                        <tr>
+                            <th>Campaign Name</th>
+                            <th>Status</th>
+                            <th>Objective</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            campaigns.forEach(campaign => {
+                html += `
+                    <tr>
+                        <td>${campaign.name || 'Unknown'}</td>
+                        <td>
+                            <span style="background-color: ${(campaign.status === 'ENABLED' || campaign.status === 'ACTIVE') ? '#48bb78' : '#f56565'}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                                ${campaign.status || 'UNKNOWN'}
+                            </span>
+                        </td>
+                        <td>${campaign.objective || 'N/A'}</td>
+                        <td>${campaign.created_time ? new Date(campaign.created_time).toLocaleDateString() : 'N/A'}</td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table>';
+            campaignsDiv.innerHTML = html;
+        }
+        
+        // Initialize
+        updateAuthStatus();
+    </script>
+</body>
+</html>

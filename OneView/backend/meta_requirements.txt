@@ -1,0 +1,17 @@
+# Meta Marketing API Test Requirements
+# Run: pip install -r meta_requirements.txt
+
+# Core HTTP requests library
+requests>=2.31.0
+
+# Environment variable management
+python-dotenv>=1.0.0
+
+# JSON handling (built into Python, but explicit for clarity)
+# json - built-in module
+
+# Date/time handling (built into Python)
+# datetime - built-in module
+
+# OS interaction (built into Python)
+# os - built-in module

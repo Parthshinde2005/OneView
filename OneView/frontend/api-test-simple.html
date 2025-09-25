@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KPI Dashboard API Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #1a202c; color: #e2e8f0; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .card { background: #2d3748; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        .btn { background: #4299e1; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
+        .btn:hover { background: #3182ce; }
+        .error { color: #f56565; }
+        .success { color: #68d391; }
+        .log { background: #2a2a2a; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 12px; }
+        pre { white-space: pre-wrap; word-wrap: break-word; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 KPI Dashboard API Connection Test</h1>
+        
+        <div class="card">
+            <h3>Authentication Test</h3>
+            <button class="btn" onclick="testLogin()">Test Login</button>
+            <div id="loginResult"></div>
+        </div>
+        
+        <div class="card">
+            <h3>KPI Data Test</h3>
+            <button class="btn" onclick="testKPIData()" id="kpiBtn" disabled>Test KPI Data (Login First)</button>
+            <div id="kpiResult"></div>
+        </div>
+        
+        <div class="card">
+            <h3>Console Logs</h3>
+            <div id="logs" class="log"></div>
+        </div>
+    </div>
+
+    <script>
+        let authToken = null;
+        
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logDiv = document.getElementById('logs');
+            logDiv.innerHTML += `[${timestamp}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+        
+        async function testLogin() {
+            log('🔐 Testing login...');
+            const loginResult = document.getElementById('loginResult');
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: 'admin@company.com',
+                        password: 'admin123'
+                    })
+                });
+                
+                log(`Login response status: ${response.status} ${response.statusText}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                authToken = data.access_token;
+                
+                loginResult.innerHTML = `
+                    <div class="success">
+                        ✅ Login Successful!<br>
+                        User: ${data.user.first_name} ${data.user.last_name} (${data.user.role})<br>
+                        Token: ${authToken ? 'Received' : 'Missing'}
+                    </div>
+                `;
+                
+                document.getElementById('kpiBtn').disabled = false;
+                log('✅ Login successful, token received');
+                
+            } catch (error) {
+                log(`❌ Login failed: ${error.message}`);
+                loginResult.innerHTML = `<div class="error">❌ Login Failed: ${error.message}</div>`;
+            }
+        }
+        
+        async function testKPIData() {
+            log('📊 Testing KPI data fetch...');
+            const kpiResult = document.getElementById('kpiResult');
+            
+            if (!authToken) {
+                kpiResult.innerHTML = '<div class="error">❌ No auth token. Please login first.</div>';
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/kpi-data', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                log(`KPI data response status: ${response.status} ${response.statusText}`);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    log(`KPI data error response: ${errorText}`);
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                log(`KPI data received: ${JSON.stringify(Object.keys(data), null, 2)}`);
+                
+                kpiResult.innerHTML = `
+                    <div class="success">
+                        ✅ KPI Data Retrieved Successfully!<br>
+                        <strong>Response Keys:</strong> ${Object.keys(data).join(', ')}<br>
+                        <strong>User Role:</strong> ${data.user_role}<br>
+                        <strong>Data Keys:</strong> ${Object.keys(data.data || {}).join(', ')}<br>
+                        <strong>Google Ads Campaigns:</strong> ${(data.data?.google_ads?.campaigns || []).length}<br>
+                        <strong>Meta Ads Campaigns:</strong> ${(data.data?.meta_ads?.campaigns || []).length}
+                    </div>
+                    <details>
+                        <summary>View Full Response</summary>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    </details>
+                `;
+                
+                log('✅ KPI data fetch successful');
+                
+            } catch (error) {
+                log(`❌ KPI data fetch failed: ${error.message}`);
+                kpiResult.innerHTML = `<div class="error">❌ KPI Data Fetch Failed: ${error.message}</div>`;
+            }
+        }
+        
+        log('🚀 API Test Page Loaded');
+    </script>
+</body>
+</html>
