@@ -32,5 +32,11 @@ A centralized dashboard that provides **real-time campaign performance visibilit
 
 ---
 
+## 🛠️ Tech Stack (Example)
+
+  - Data Sources: Google Ads, Meta Ads, GA4, TikTok Ads
+  - Backend: API connectors + data pipeline
+  - Database: Cloud data warehouse
+  - Frontend: Web-based interactive dashboard
 
 
